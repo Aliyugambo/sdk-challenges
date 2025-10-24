@@ -54,7 +54,7 @@ Look for all the `// TODO:` comments and implement them.
 ## SDK Documentation
 
 Check the docs for `fetchAllRecords()`:
-[MantaHQ Docs - fetchAllRecords()](https://mantahq-core-sdk.super.site/fetching-data/fetchonerecord)
+[MantaHQ Docs - fetchAllRecords()](https://mantahq-core-sdk.super.site/fetching-data/fetchallrecords)
 
 **Key things you'll use:**
 
