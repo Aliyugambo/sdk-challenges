@@ -13,10 +13,15 @@ function AddProductForm({ isOpen, setIsOpen, onSubmit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
+    
+    // Convert numeric fields to numbers
+    const processedValue = type === 'number' ? 
+      (value === '' ? '' : Number(value)) : value;
+    
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: processedValue,
     }));
   };
 
@@ -25,7 +30,14 @@ function AddProductForm({ isOpen, setIsOpen, onSubmit }) {
     setIsSubmitting(true);
 
     try {
-      await onSubmit(formData);
+      // Convert empty strings to appropriate types before submission
+      const processedData = {
+        ...formData,
+        price: formData.price === '' ? 0 : Number(formData.price),
+        stock: formData.stock === '' ? 0 : Number(formData.stock)
+      };
+
+      await onSubmit(processedData);
       // Reset form on success
       setFormData({
         name: "",
@@ -35,9 +47,9 @@ function AddProductForm({ isOpen, setIsOpen, onSubmit }) {
         description: "",
         image_url: "",
       });
-      setIsOpen(false);
     } catch (error) {
       console.error("Error submitting form:", error);
+      alert(error.message || "Failed to create product. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

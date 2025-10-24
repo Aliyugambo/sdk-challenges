@@ -89,7 +89,7 @@ function Main() {
   async function fetchProducts() {
     try {
       const products = await manta.fetchAllRecords({
-        table: "products2",
+        table: "products",
         where: filterByCategory,
         fields: [
           "product_id",
@@ -107,7 +107,7 @@ function Main() {
         orderBy: "price",
         order: sortOrder,
         page: currentPage,
-        list: itemsPerPage,
+        limit: itemsPerPage,
       });
 
       if (!products.status) throw new Error("Failed to fetch products");
@@ -122,15 +122,65 @@ function Main() {
   }
 
   async function createProducts(formData) {
+    // Local validation
+    if (!formData.name || formData.name.length < 3) {
+      throw new Error("Product name must be at least 3 characters long");
+    }
+    if (!formData.price || formData.price <= 0) {
+      throw new Error("Price must be greater than 0");
+    }
+    if (typeof formData.stock !== 'number' || formData.stock < 0) {
+      throw new Error("Stock must be 0 or greater");
+    }
+    if (!formData.category) {
+      throw new Error("Category is required");
+    }
+
     try {
-      //
-      // TODO: Your manta.createRecords() implementation here
-      //
+      setLoading(true); // Show loading state
+
+      // Generate unique product_id using timestamp and random string
+      const timestamp = new Date().getTime();
+      const random = Math.random().toString(36).substring(2, 8);
+      const product_id = `PROD_${timestamp}_${random}`;
+
+      // Convert numbers to strings as required by the table schema
+      const record = {
+        product_id,
+        name: formData.name.trim(),
+        category: formData.category,
+        price: String(Number(formData.price)), // Convert to string
+        stock: String(Number(formData.stock)), // Convert to string
+        description: formData.description?.trim() || "",
+        image_url: formData.image_url?.trim() || ""
+      };
+
+      const response = await manta.createRecords({
+        table: "products",
+        data: [record], // Changed from 'records' to 'data'
+        options: {
+          upsert: true,
+          conflictKeys: ['product_id']
+        }
+      });
+
+      if (!response.status) {
+        throw new Error(response.message || "Failed to create product");
+      }
+
+      // Success! Close modal and refresh products
+      setIsOpen(false);
+      await fetchProducts(); // Refresh the product list
+      
+      // Show success message (you might want to use a toast/notification system instead)
       alert("Product added successfully!");
     } catch (error) {
-      console.error(error);
-      alert("Error adding product: " + error.message);
+      console.error("Error creating product:", error);
+      const errorMessage = error.message || "Failed to create product. Please try again.";
+      alert(errorMessage);
       throw error; // Re-throw so the form can handle it
+    } finally {
+      setLoading(false);
     }
   }
 
