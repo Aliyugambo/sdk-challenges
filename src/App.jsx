@@ -1,9 +1,9 @@
-import CreateRecords from "./components/CreateRecords";
+import UpdateRecords from "./components/UpdateRecords";
 
 function App() {
   return (
     <div>
-      <CreateRecords />
+      <UpdateRecords />
     </div>
   );
 }

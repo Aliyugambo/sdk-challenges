@@ -177,14 +177,60 @@ function Main() {
 
   // TODO: Implement updateProduct function
   async function updateProduct(productId, formData) {
+    // Local validation before making the API call
+    if (!formData.name || formData.name.length < 3) {
+      throw new Error("Product name must be at least 3 characters long");
+    }
+    if (!formData.price || parseFloat(formData.price) <= 0) {
+      throw new Error("Price must be greater than 0");
+    }
+    if (formData.stock === undefined || parseInt(formData.stock) < 0) {
+      throw new Error("Stock must be 0 or greater");
+    }
+
     try {
-      // 1. Call manta.updateRecords with
-      // 2. Check response.status
-      // 3. Call fetchProducts() to refresh list
-      // 4. Show success alert
-      // 5. Handle errors with user-friendly messages
+      setLoading(true);
+
+      // Format the data for update
+      const updateData = {
+        name: formData.name.trim(),
+        category: formData.category,
+        price: parseFloat(formData.price),
+        stock: parseInt(formData.stock),
+        description: formData.description?.trim() || "",
+        image_url: formData.image_url?.trim() || "https://via.placeholder.com/300"
+      };
+
+      const response = await manta.updateRecords({
+        table: "products2",
+        data: updateData,
+        where: { product_id: productId }, // CRITICAL: target specific product
+        options: {
+          validationRule: { // Note: singular, not plural!
+            name: { minLength: 3 },
+            price: { min: 0 },
+            stock: { min: 0 }
+          }
+        }
+      });
+
+      if (!response.status) {
+        throw new Error(response.message || "Failed to update product");
+      }
+
+      // Success! Close modal and refresh products
+      setIsEditOpen(false);
+      setSelectedProduct(null);
+      await fetchProducts(); // Refresh the product list
+      
+      // Show success message
+      alert("Product updated successfully!");
     } catch (error) {
-      console.error(error);
+      console.error("Error updating product:", error);
+      const errorMessage = error.message || "Failed to update product. Please try again.";
+      alert(errorMessage); // Show user-friendly error message
+    } finally {
+      setLoading(false);
     }
   }
 
