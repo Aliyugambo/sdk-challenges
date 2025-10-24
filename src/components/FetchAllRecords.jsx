@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useDebounce } from "use-debounce";
 import { ErrorBoundary } from "react-error-boundary";
+import MantaClient from "mantahq-sdk";
 
 // =============================================================================
 // CHALLENGE #1: Product Catalog with fetchAllRecords()
@@ -22,7 +23,9 @@ import { ErrorBoundary } from "react-error-boundary";
 // TODO: Initialize the MantaHQ SDK client
 // Get your API key from the .env file and create a MantaClient instance
 const API_KEY = import.meta.env.VITE_MANTAHQ_API_KEY;
-const manta = null; // Replace null with: new MantaClient({ sdkKey: API_KEY })
+const manta = new MantaClient({sdkKey: API_KEY}); // Replace null with: new MantaClient({ sdkKey: API_KEY })
+
+
 
 function FetchAllRecords() {
   return (
@@ -68,29 +71,100 @@ function Main() {
   const [sortPrice, setSortPrice] = useState("lowest");
   const [query, setQuery] = useState("");
 
-  const itemsPerPage = 6; // Number of products per page
+  const itemsPerPage = 6; // Number of products per page (matching the UI requirement)
 
   // TODO: Implement the fetchProducts function
-  async function fetchProducts() {
+  async function fetchProducts(retryCount = 0) {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second delay between retries
+    
     setLoading(true);
 
     try {
-      // TODO: Build the 'where' condition for category filtering
-      // HINT: If category is "all", use an empty object {}
-      // Otherwise, filter by the selected category: { category: category }
-      const filterByCategory = {}; // Replace with your implementation
+      const filterByCategory = category === "all" ? {} : { category };
+      const sortOrder = sortPrice === "lowest" ? "asc" : "desc";
 
-      // TODO: Determine sort order
-      const sortOrder = "asc"; // Replace with your implementation
+      let response;
+      try {
+        response = await manta.fetchAllRecords({
+          table: "products",
+          fields: [
+            "product_id",
+            "name",
+            "category",
+            "price",
+            "stock",
+            "description",
+            "image_url",
+          ],
+          where: filterByCategory,
+          search: query ? {
+            columns: ["name", "description"],
+            query: query
+          } : undefined,
+          orderBy: "price",
+          order: sortOrder,
+          page: currentPage,
+        limit: itemsPerPage, // Changed from 'list' to 'limit'
+        });
+      } catch (error) {
+        // Check if it's a write conflict error and we haven't exceeded max retries
+        if (error.statusCode === 500 && 
+            error.message.includes("Write conflict") && 
+            retryCount < MAX_RETRIES) {
+          // Wait for RETRY_DELAY milliseconds
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+          // Retry the fetch with incremented retry count
+          return fetchProducts(retryCount + 1);
+        }
+        // If it's not a write conflict or we've exceeded retries, rethrow
+        throw error;
+      }
 
-      // TODO: Call manta.fetchAllRecords() with the appropriate parameters:
+      // Parse the response data
+      if (!response || typeof response !== 'object') {
+        throw new Error('Invalid response from server');
+      }
 
-      // TODO: Check if the response was successful
+      let records = [];
+      let total = 0;
 
-      // TODO: Update state with the fetched data
+      // Handle different response formats
+      if (Array.isArray(response)) {
+        // If response is an array, use it directly
+        records = response;
+        total = response.length;
+      } else if (response.data) {
+        // If response has a data property
+        records = Array.isArray(response.data) ? response.data : [];
+        // Try to get total from various possible properties
+        total = response.total || response.count || response.data.length;
+      } else {
+        // If no recognizable format, throw error
+        throw new Error('Unexpected response format from server');
+      }
+
+      // Calculate total pages (at least 1 page if we have records)
+      const resolvedTotalPages = Math.max(1, Math.ceil(total / itemsPerPage));
+
+      // Update state with the fetched data
+      setProducts(records);
+      setTotalPages(resolvedTotalPages);
     } catch (error) {
       console.error("Error fetching products:", error);
-      // You can add additional error handling here
+      setProducts([]);
+      setTotalPages(0);
+      
+      // If it's a write conflict and we haven't exceeded max retries
+      if (error.statusCode === 500 && 
+          error.message.includes("Write conflict") && 
+          retryCount < MAX_RETRIES) {
+        console.log(`Retrying... Attempt ${retryCount + 1} of ${MAX_RETRIES}`);
+        // Wait for RETRY_DELAY milliseconds
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        // Retry the fetch with incremented retry count
+        return fetchProducts(retryCount + 1);
+      }
     } finally {
       setLoading(false);
     }
@@ -103,7 +177,11 @@ function Main() {
   }
 
   // TODO: Set up useEffect to fetch products when dependencies change
-  useEffect(() => {}, []); // Replace [] with proper dependencies
+  useEffect(() => {
+    // Fetch products whenever filters, search, sort, or pagination change
+    fetchProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category, sortPrice, query, currentPage]);
 
   return (
     <div>
@@ -257,20 +335,23 @@ function Products({ products, loading }) {
 }
 
 function Paging({ currentPage, setCurrentPage, totalPages }) {
+  // Don't show pagination if there are no pages
+  if (totalPages <= 0) return null;
+
   return (
     <div className="flex justify-center items-center my-10 space-x-3">
       <button
-        disabled={currentPage === 1}
+        disabled={currentPage <= 1}
         onClick={() => setCurrentPage((prevPage) => Math.max(1, prevPage - 1))}
         className="px-4 py-2 cursor-pointer text-base sm:text-xl text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         &larr; Previous page
       </button>
       <span className="text-base sm:text-xl">
-        Page {currentPage} of {totalPages === 0 ? "-" : totalPages}
+        Page {currentPage} of {totalPages}
       </span>
       <button
-        disabled={currentPage === totalPages || totalPages === 0}
+        disabled={currentPage >= totalPages}
         className="px-4 py-2 cursor-pointer text-base sm:text-xl text-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={() =>
           setCurrentPage((prevPage) => Math.min(totalPages, prevPage + 1))
