@@ -1,9 +1,9 @@
-import CreateRecords from "./components/CreateRecords";
+import DeleteRecords from "./components/DeleteRecords";
 
 function App() {
   return (
     <div>
-      <CreateRecords />
+      <DeleteRecords />
     </div>
   );
 }

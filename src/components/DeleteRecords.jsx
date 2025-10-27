@@ -223,16 +223,35 @@ function Main() {
     }
   }
 
-  // TODO: Implement deleteProduct function
+  // Implement deleteProduct function with safe deletion practices
   async function deleteProduct(productId) {
     try {
-      // 1. Call manta.deleteRecords with:
-      // 2. Check response.status
-      // 3. Call fetchProducts() to refresh list
-      // 4. Show success alert with product name
-      // 5. Handle errors with user-friendly messages
+      // Get product details before deletion for the success message
+      const productToDelete = products.find(p => p.product_id === productId);
+      if (!productToDelete) {
+        throw new Error('Product not found');
+      }
+
+      // Call manta.deleteRecords with where clause to target specific product
+      const response = await manta.deleteRecords({
+        table: "products2",
+        where: { product_id: productId }
+      });
+
+      // Check response status
+      if (!response.status) {
+        throw new Error('Failed to delete product');
+      }
+
+      // Refresh products list after successful deletion
+      await fetchProducts();
+
+      // Show success alert with product name
+      alert(`Successfully deleted product: ${productToDelete.name}`);
     } catch (error) {
       console.error(error);
+      // Show user-friendly error message
+      alert('Error deleting product: ' + (error.message || 'Unknown error occurred'));
     }
   }
 
